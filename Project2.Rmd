@@ -1,0 +1,473 @@
+---
+title: "Pro2"
+author: "Yanda Lyu"
+date: "2023-12-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#1.
+
+data <- read.table('diabetes.txt', header = TRUE,
+                   stringsAsFactors = FALSE)
+
+# Required libraries
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(purrr)
+
+# List of quantitative variables
+quan <- c("chol", "stab.glu", "hdl", "ratio", "glyhb", "age", "height", 
+          "weight", "bp.1s", "bp.1d", "waist", "hip", "time.ppn")
+
+# Function to create a histogram for a given variable
+create_histogram <- function(var) {
+  ggplot(data, aes_string(x = var)) + 
+    geom_histogram(bins = 20, color = "black", fill = "white") 
+}
+
+# Apply the function to each quantitative variable and store the plots
+plot_list <- map(quan, create_histogram)
+
+# Arrange the plots in a grid
+ggarrange(plotlist = plot_list, nrow = 3, ncol = 3)
+
+# chol looks like normal, a little bit right skewed.
+# stab.glu is right skewed.
+# hdl is right skewed.
+# ratio is right skewed.
+# glyhb is right skewed.
+# age is uniformed, a little bit skewed right.
+# height is normal, a little bit left skewed.
+# weight is normal, a little bit skewed right.
+# bp.1s is right skewed.
+# bp.1d is normal.
+# waist is normal, a little bit skewed right.
+# hip is skewed right.
+# time.ppn is skewed right.
+```
+
+```{r}
+# Data for qualitative variables
+qual <- c("location", "gender", "frame")
+
+# Function to create a pie chart for a given variable
+create_pie_chart <- function(var) {
+  pie(table(data[[var]]), main = paste("Pie Chart of", var))
+}
+
+# Apply the function to each qualitative variable
+lapply(qual, create_pie_chart)
+
+# Louisa has more people than Buckingham. About half-half.
+
+# Female is more than male. Female has portion of 3/5 and male has 2/5.
+
+# Medium about 1/2. Large and small each are about 1/4.
+```
+
+```{r, fig.width=20, fig.height=20}
+# Required library
+# Load the GGally library
+library(GGally)
+
+# Define the columns to be used in the scatter plot matrix
+selected_columns <- c(1, 2, 3, 4, 5, 7, 9, 10, 12, 13, 14, 15, 16)
+
+# Create the scatter plot matrix using ggpairs
+scatter_matrix_plot <- ggpairs(data, columns = selected_columns, 
+                               title = "scatter_matrix_plot")
+
+# Save the plot to a file
+output_file_name <- "Scatter_plot_matrix.png"
+ggsave(output_file_name, scatter_matrix_plot, width = 10, height = 10, units = "in")
+
+# Display the scatter matrix plot
+print(scatter_matrix_plot)
+
+```
+
+```{r}
+#2.
+
+# Load necessary libraries
+library(ggfortify)
+
+# Create the linear model
+model1 <- lm(glyhb ~ ., data = data)
+
+# Display summary of the model
+summary(model1)
+
+# Diagnostic plots using ggplot2 for better visualization
+
+# 1. Residuals vs Fitted
+p1 <- autoplot(model1, which = 1) + 
+      ggtitle("Residuals vs Fitted") +
+      theme_minimal()
+print(p1)
+
+# The scatter plot's linear assumption reveals the absence of a linear relationship between X and Y, exhibiting fanning out, indicative of heteroskedasticity.
+
+# 2. Normal Q-Q plot
+p2 <- autoplot(model1, which = 2) + 
+      ggtitle("Normal Q-Q Plot") +
+      theme_minimal()
+print(p2)
+# The QQ plot demonstrates that the observation quantile lies below the theoretical line, indicating that the residual distribution has heavy tails and suggesting an overpowered inference.
+
+# 3. Histogram of Residuals
+p3 <- hist(residuals(model1), main = "Histogram of Residuals", xlab = "Residuals",
+     breaks = 50)
+print(p3)
+# The histogram is normal, a little bit right skewed.
+
+# 4. Scatterplot of Residuals vs Fitted values
+p4 <- ggplot() + 
+      geom_point(aes(x = fitted(model1), y = residuals(model1))) + 
+      ggtitle("Scatterplot of Model 1") +
+      theme_minimal()
+print(p4)
+# The residual plot does not support the equal variance assumption, as evidenced by a pattern of fanning out, indicative of heteroskedasticity.
+```
+
+```{r}
+#3.
+library(MASS)
+library(ggplot2)
+
+# QQ plot for model1 residuals
+ggplot(data.frame(Residuals = model1$residuals), aes(sample = Residuals)) +
+    geom_qq() +
+    geom_qq_line() +
+    ggtitle("QQ Plot for Model 1 Residuals")
+BC = boxcox(model1, lambda = seq(-6, 6, 0.1), plotit = FALSE)
+lambda = BC$x[which.max(BC$y)]
+# Assuming 'data' is your dataset and 'glyhb' is a variable in it
+data$glybh_t = 1 / data$glyhb
+data = data[,-which(names(data) == "glyhb")] # Remove 'glyhb' column
+
+# Create model2
+model2 = lm(glybh_t ~ ., data = data)
+ggplot(data.frame(Residuals = model2$residuals), aes(sample = Residuals)) +
+    geom_qq() +
+    geom_qq_line() +
+    ggtitle("QQ Plot for Model 2 Residuals")
+BC2 = boxcox(model2, lambda = seq(-6, 6, 0.1), plotit = FALSE)
+lambda2 = BC2$x[which.max(BC2$y)]
+#Following the Box-Cox transformation on model2, the outcome is close to 1, indicating that no further transformation is necessary.
+```
+
+```{r}
+#4.
+
+# Set the seed for reproducibility
+set.seed(372)
+
+# Determine the number of rows in the dataset
+n_rows <- nrow(data)
+
+# Calculate the size of the training dataset (70% of the total data)
+training_size <- floor(0.7 * n_rows)
+
+# Randomly sample indices for the training dataset
+ti <- sample(seq_len(n_rows), training_size)
+
+# Construct the training dataset using the selected indices
+td <- data[ti, ]
+
+# Construct the test (validation) dataset using the remaining indices
+test_data <- data[-ti, ]
+
+test_data <- data[-ti, ]
+
+```
+
+```{r}
+#5.
+
+model3 <- lm(glybh_t ~ ., data = td)
+
+# Number of regression coefficients in Model 3
+num_coefficients_m3 <- length(coef(model3))
+
+# Mean Squared Error (MSE) from Model 3
+# ((nrow(td)-num_coefficients) = (n-p))
+mse_model3 <- (sum(residuals(model3)^2))/ (nrow(td)-num_coefficients_m3)
+
+# Print the results
+cat("Number of coefficients in Model 3:", num_coefficients_m3, "\n")
+cat("MSE from Model 3:", mse_model3, "\n")
+```
+
+```{r}
+#6.
+
+library(leaps)
+
+# Perform subset regression
+all.models <- regsubsets(glybh_t ~ ., data = td, nbest=1, nvmax=16)
+
+# Get summary of all models
+summary_stuff <- summary(all.models)
+
+# Prepare the names of variables
+names_of_data <- c("Y", colnames(summary_stuff$which)[-1])
+
+# Constants
+n <- nrow(td)
+K <- nrow(summary_stuff$which)
+log_n <- log(n)  # Pre-calculate log(n) for repeated use
+
+# Function to process each model
+process_model <- function(i) {
+  model_vars <- names_of_data[summary_stuff$which[i,]]
+  model <- paste(model_vars, collapse = ",")
+  p <- length(model_vars)
+  
+  BIC <- summary_stuff$bic[i]
+  AIC <- BIC - (log_n * p) + 2 * p
+  CP <- summary_stuff$cp[i]
+  R2adj <- summary_stuff$adjr2[i]
+  SSE <- summary_stuff$rss[i]
+  R2 <- summary_stuff$rsq[i]
+  
+  data.frame(model, p, CP, AIC, BIC, R2adj, SSE, R2)
+}
+
+# Apply the function to all models and combine results
+nicer <- do.call(rbind, lapply(1:K, process_model))
+nicer
+
+#The optimal model would be: Y ~ stab.glu + ratio + age + waist. Based on the CP criterion, the best model has a CP value of 5.077535, closely aligning with a P value of 5. This close proximity to P alleviates concerns about the full model being underfit, as CP being closest to P suggests a well-fitted model.
+```
+
+```{r}
+#7.
+
+
+model3.1=lm(glybh_t ~stab.glu+ ratio+ age+ waist+ time.ppn, data=td, x=T)
+
+model3.2=lm(glybh_t ~stab.glu+age+waist, data=td, x=T)
+
+model3.3=lm(glybh_t ~chol+stab.glu+hdl+age+gender+height+waist+time.ppn, data=td, x=T)
+
+```
+
+```{r}
+#8.
+
+# Model 4: Fit a model with all first-order effects
+model4 <- lm(glybh_t ~ .^2, data = td)
+
+# Number of regression coefficients in Model 4
+m4_num_coef<- length(coef(model4))
+
+# Mean Squared Error (MSE) from Model 4
+mse_model4<- (sum(residuals(model4)^2))/ (nrow(td)-m4_num_coef)
+
+# Print the results
+cat("Number of coefficients in Model 4:", m4_num_coef, "\n")
+cat("MSE from Model 4:", mse_model4, "\n")
+
+# "I have reservations regarding the suitability of this model due to its inclusion of two-way interaction effects. This approach generates a substantial number of coefficients, potentially leading to overfitting
+```
+
+```{r}
+#9.
+# Loading necessary library
+library(glmnet)
+
+# Preparing the Data
+x <- model.matrix(glybh_t ~ .^2, data = td)[, -1]
+y <- td$glybh_t
+
+# Ridge Regression
+lambdas <- c(0.01, 0.1, 1, 10, 100)
+model <- glmnet(x, y, alpha = 0, lambda = lambdas)
+plot(model, xvar = "lambda")
+
+# Cross-Validation for Lambda Selection
+set.seed(123) # Set seed for reproducibility
+ti <- sample(1:nrow(td), nrow(td)*0.7)
+x_train <- x[ti, ]
+y_train <- y[ti]
+x_test <- x[-ti, ]
+y_test <- y[-ti]
+
+cv_ridge <- cv.glmnet(x_train, y_train, alpha = 0, lambda = lambdas)
+best_lambda <- cv_ridge$lambda.min
+plot(cv_ridge)
+abline(v = log(best_lambda), col = "blue", lwd = 2)
+
+# Calculate MSPE on Test Set
+predictions <- predict(cv_ridge, newx = x_test, s = "lambda.min")
+mspe <- mean((predictions - y_test)^2)
+print(mspe)
+
+# Final Model
+final_model <- glmnet(x, y, alpha = 0, lambda = best_lambda)
+coef_final <- coef(final_model)
+print(coef_final)
+
+
+```
+
+```{r}
+#10.
+
+# Loading the glmnet library
+# Load required library
+# Define lambda values
+lambdas <- c(0.01, 0.1, 1, 10, 100)
+
+# Fit a Lasso regression model using glmnet
+model.lasso = glmnet(x_train, y_train, alpha = 1, lambda = lambdas)
+
+# Plot the regularization path
+plot(model.lasso, xvar = "lambda")
+
+# Fit a Lasso regression model with cross-validation
+cv_lasso = cv.glmnet(x_train, y_train, alpha = 1, lambda = lambdas)
+
+# Plot the cross-validation result
+plot(cv_lasso)
+
+# Add a vertical line for the best lambda
+best.lambda.lasso = cv_lasso$lambda.min
+abline(v = log(best.lambda.lasso), col = "blue", lwd = 2)
+
+# Rest of the code for fitting the final model and calculating MSPE
+
+
+
+```
+
+```{r}
+#11.
+
+# Ridge regression incorporates a penalty term of the squared value of the coefficients (beta squared), which leads to the shrinking of the coefficients towards zero, but not exactly to zero. This method is particularly effective in scenarios where multicollinearity exists and all features are expected to have some contribution. On the other hand, LASSO regression adds an absolute penalty term of the coefficients (|beta|), allowing it to reduce some coefficients to zero, thus facilitating feature selection. LASSO is advantageous when the objective is to select relevant features or when there is a presumption that some features might be irrelevant. In summary, Ridge regression is best suited for situations with multicollinearity concerns, while LASSO excels in contexts where prioritizing feature selection is key.
+
+```
+
+```{r}
+#12.
+library(MASS)
+library(glmnet)
+
+cal_press <- function(model, data = NULL, response = NULL, is_glmnet = FALSE, X = NULL, y = NULL, alpha = NULL, lambda = NULL) {
+  press = 0
+  n <- ifelse(is.null(data), nrow(X), nrow(data))
+  for (i in 1:n) {
+    if (is_glmnet) {
+      # glmnet model
+      X_train <- X[-i, ]
+      y_train <- y[-i]
+      X_test <- X[i, , drop = FALSE]
+      y_test <- y[i]
+      
+      # Check dimensions
+      if (nrow(X_train) != length(y_train)) {
+        stop("Mismatch in dimensions of X_train and y_train")
+      }
+
+      fit <- cv.glmnet(X_train, y_train, alpha = alpha, lambda = lambda)
+      prediction <- predict(fit, s = fit$lambda.min, newx = X_test)
+      press <- press + (y_test - prediction)^2
+    } else {
+      # lm model
+      train_data <- data[-i, ]
+      test_data <- data[i, , drop = FALSE]
+      fit <- lm(as.formula(model), data = train_data)
+      prediction <- predict(fit, newdata = test_data)
+      press <- press + (test_data[[response]] - prediction)^2
+    }
+  }
+  return(press)
+}
+
+# Example Usage:
+# Assuming td, X_train, y_train, and lambdas are already defined
+press_model3_1 <- cal_press("glybh_t ~ stab.glu + ratio + age + waist + time.ppn", data = td, response = "glybh_t")
+press_model3_2 <- cal_press("glybh_t ~ stab.glu + age + waist", data = td, response = "glybh_t")
+press_model3_3 <- cal_press("glybh_t ~ chol + stab.glu + hdl + age + gender + height + waist + time.ppn", data = td, response = "glybh_t")
+press_model4_1 <- cal_press(NULL, X = x_train, y = y_train, is_glmnet = TRUE, alpha = 0, lambda = lambdas)
+press_model4_2 <- cal_press(NULL, X = x_train, y = y_train, is_glmnet = TRUE, alpha = 1, lambda = lambdas)
+
+cat("Model 3.1 PRESS = ", press_model3_1, "\n")
+cat("Model 3.2 PRESS = ", press_model3_2, "\n")
+cat("Model 3.3 PRESS = ", press_model3_3, "\n")
+cat("Model 4.1 PRESS = ", press_model4_1, "\n")
+cat("Model 4.2 PRESS = ", press_model4_2, "\n")
+
+## The PRESS score for model 3.1 is smallest, indicating the performance of model 3.1 is best
+```
+
+```{r}
+#13.
+cal_mspe <- function(model, test_data=NULL, response=NULL, X_test=NULL, y_test=NULL, is_glmnet=FALSE){
+  # Get prediction if it is glmnet
+  if(is_glmnet){
+    prediction <- predict(model, s = model$lambda.min, newx=X_test)
+    # calculate mspe
+    mspe <- mean((y_test - prediction)^2)
+  }else{
+    # Get prediction if it is lm
+    prediction <- predict(model, newdata = test_data)
+    # calculate mspe
+    mspe <- mean((test_data[[response]] - prediction)^2)
+  }
+  return(mspe)
+}
+
+mspe_model3_1 <- cal_mspe(model3.1, test_data=test_data, response = "glybh_t")
+mspe_model3_2 <- cal_mspe(model3.2, test_data=test_data, response = "glybh_t")
+mspe_model3_3 <- cal_mspe(model3.3, test_data=test_data, response = "glybh_t")
+mspe_model4_1 <- cal_mspe(cv_ridge, X_test=x_test, y_test=y_test, is_glmnet = TRUE)
+mspe_model4_2 <- cal_mspe(cv_lasso, X_test=x_test, y_test=y_test, is_glmnet = TRUE)
+
+cat("Model 3.1 MSPE = ", mspe_model3_1, "\n")
+cat("Model 3.2 MSPE = ", mspe_model3_2, "\n")
+cat("Model 3.3 MSPE = ", mspe_model3_3, "\n")
+cat("Model 4.1 MSPE = ", mspe_model4_1, "\n")
+cat("Model 4.2 MSPE = ", mspe_model4_2, "\n")
+
+cat("Model 3.1 PRESS/n = ", press_model3_1/nrow(td), "\n")
+cat("Model 3.2 PRESS/n = ", press_model3_2/nrow(td), "\n")
+cat("Model 3.3 PRESS/n = ", press_model3_3/nrow(td), "\n")
+cat("Model 4.1 PRESS/n = ", press_model4_1/nrow(x_train), "\n")
+cat("Model 4.2 PRESS/n = ", press_model4_2/nrow(x_train), "\n")
+
+# The MSPE score for model 3.1 is smallest, indicating the performance on test data for model 4.1 is best.
+# The MSPS scores are slightly larger than PRESS/n
+```
+
+```{r}
+#14.
+# Considering both internal validation (lowest PRESS from LOOCV on training data) and external validation (lowest MSPE on test data), Model 4.1 would be the preferred choice as the final model, as it balances good predictive performance on both training and unseen data.
+model5 <- cv.glmnet(x, y, alpha = 0, lambda = lambdas)
+best_lambda <- cv_ridge$lambda.min
+coefficients <- coef(cv_ridge, s = best_lambda)
+cat("best lambda = ", best_lambda, "\n")
+cat("coefficients:\n")
+coefficients
+```
+
+In this ridge regression model, we aim to understand the complex relationships between various health-related predictors and a specific response variable, likely indicative of a health outcome. The model incorporates a range of predictors, including biochemical markers, demographic factors, and interaction terms, offering a nuanced view of the factors influencing the response variable.
+
+The intercept of the model, at approximately 0.277, sets a baseline for the response variable. This baseline represents the expected value of the response when all other predictors are held at zero. However, in a real-world context, such a scenario might be implausible, as it is unlikely for all these predictors to simultaneously assume zero values. Therefore, the intercept should be interpreted within the realm of the data's practical constraints.
+
+The coefficients for individual predictors, such as cholesterol (`chol`), stable glucose (`stab.glu`), and HDL cholesterol (`hdl`), quantify the average change in the response variable per unit change in these predictors, assuming other variables are constant. For instance, the coefficient for `stab.glu` suggests a slight negative association with the response variable, indicating that higher glucose stability might be linked to a decrease in the response variable. This could be crucial in understanding metabolic or cardiovascular health outcomes, where glucose stability plays a significant role.
+
+Moreover, the model includes interaction terms, such as `chol:stab.glu` and `hdl:ratio`, which capture the combined effects of two predictors on the response variable. These interactions are particularly important in biological systems where the effect of one variable might depend on the level of another. For example, the interaction between cholesterol and stable glucose might suggest a more complex relationship between metabolic factors than what is captured by their individual effects.
+
+The coefficients associated with demographic factors like age, gender, and location (e.g., `age`, `gendermale`, `locationLouisa`) provide insights into how these variables might modulate health outcomes. For instance, the coefficient for `gendermale` might reflect gender-specific differences in the response variable, which could be crucial for personalized healthcare approaches.
+
+In summary, this ridge regression model offers a comprehensive framework for understanding the multifaceted relationships between various predictors and a health-related response variable. The inclusion of interaction terms adds depth to the analysis, allowing for a more detailed exploration of how combined factors influence health outcomes. However, it is essential to interpret these results within the context of the study's design and the practical relevance of the predictors to ensure meaningful conclusions.
+
+
